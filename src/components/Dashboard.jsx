@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
-import { Wallet, Settings as SettingsIcon, Trash2, Plus, ArrowRight } from 'lucide-react'
+import { Wallet, Settings as SettingsIcon, Trash2, Plus, ArrowRight, Pencil } from 'lucide-react' // <--- Added Pencil
 import { Link } from 'react-router-dom'
 
 export default function Dashboard() {
@@ -26,8 +26,8 @@ export default function Dashboard() {
       .from('transactions')
       .select('*, accounts(name)')
       .order('date', { ascending: false })
-      .order('created_at', { ascending: false }) // Secondary sort for same-day items
-      .limit(50) // Increased limit slightly
+      .order('created_at', { ascending: false }) 
+      .limit(50) 
     
     if (transData) setTransactions(transData)
 
@@ -35,7 +35,6 @@ export default function Dashboard() {
     const { data: accData } = await supabase.from('accounts').select('*')
     if (accData) {
       setAccounts(accData)
-      // Net Worth Calculation (Bank + Cash + (Negative Credit Card Debt))
       const net = accData.reduce((acc, curr) => curr.balance + acc, 0)
       setTotalBalance(net)
     }
@@ -55,9 +54,6 @@ export default function Dashboard() {
     let newBalance = Number(acc.balance)
     
     // 3. Reverse the transaction
-    // If it was an Expense (lowered balance), we ADD it back.
-    // If it was Income (raised balance), we SUBTRACT it.
-    // This logic works for both Bank (Positive) and Credit Card (Negative) balances correctly.
     newBalance = t.type === 'Expense' ? newBalance + t.amount : newBalance - t.amount
 
     // 4. Update DB
@@ -158,7 +154,7 @@ export default function Dashboard() {
       {/* --- RECENT ACTIVITY (Grouped & Sticky) --- */}
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-bold text-gray-800 dark:text-white text-lg">Recent Activity</h3>
-        <Link to="/insights" className="text-blue-500 text-xs font-bold flex items-center gap-1">View Charts <ArrowRight size={14}/></Link>
+        <Link to="/analytics" className="text-blue-500 text-xs font-bold flex items-center gap-1">View Charts <ArrowRight size={14}/></Link>
       </div>
 
       <div className="space-y-6">
@@ -193,14 +189,20 @@ export default function Dashboard() {
                       </div>
                     </div>
                     
-                    <div className="flex items-center gap-3">
-                      <div className="text-right">
+                    <div className="flex items-center gap-2">
+                      <div className="text-right mr-2">
                         <span className={`block font-bold text-base ${t.type === 'Income' ? 'text-green-500' : 'text-gray-800 dark:text-white'}`}>
                           {t.type === 'Income' ? '+' : '-'}₹{t.amount}
                         </span>
                         <span className="text-[10px] font-bold text-gray-400 uppercase">{t.type}</span>
                       </div>
-                      {/* Delete Button (Visible on Hover/Touch) */}
+                      
+                      {/* Edit Button */}
+                      <Link to={`/edit-transaction/${t.id}`} className="p-2 text-gray-300 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
+                        <Pencil size={16}/>
+                      </Link>
+
+                      {/* Delete Button */}
                       <button onClick={() => handleDelete(t.id)} className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
                         <Trash2 size={16}/>
                       </button>

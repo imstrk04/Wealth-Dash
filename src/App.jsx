@@ -4,6 +4,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import AuthPage from './components/Auth'
 import Dashboard from './components/Dashboard'
 import AddTransaction from './components/AddTransaction'
+import EditTransaction from './components/EditTransaction' // <--- IMPORT THIS
 import AddAccount from './components/AddAccount'
 import Analytics from './components/Analytics'
 import Navbar from './components/Navbar'
@@ -33,6 +34,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/add" element={<AddTransaction />} />
+          <Route path="/edit-transaction/:id" element={<EditTransaction />} /> {/* <--- NEW ROUTE */}
           <Route path="/add-account" element={<AddAccount />} />
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/settings" element={<Settings />} />
