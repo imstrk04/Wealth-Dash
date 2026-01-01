@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowDown, ArrowLeft } from 'lucide-react'
+import { ArrowDown, ArrowLeft, HelpCircle, X } from 'lucide-react' // Added HelpCircle, X
 
 // The Curated List
 const EMOJI_LIST = ['🍔', '🍕', '🍺', '☕', '🚗', '🚕', '✈️', '⛽', '🛍️', '🎁', '💡', '🎬', '💊', '📚', '💰', '💸', '🏠', '🐶', '💻', '🏋️', '🏥', '🚌', '👶', '👗']
 
 export default function AddTransaction() {
   const navigate = useNavigate()
+  const [showHelp, setShowHelp] = useState(false) // State for Help Modal
+  
   const [amount, setAmount] = useState('')
   const [description, setDescription] = useState('')
   const [type, setType] = useState('Expense')
@@ -117,16 +119,46 @@ export default function AddTransaction() {
   }
 
   return (
-    // FIX: Added 'w-full overflow-x-hidden' to prevent horizontal scroll/white bar
-    <div className="p-4 max-w-md mx-auto pb-24 dark:bg-gray-900 min-h-screen w-full overflow-x-hidden">
+    <div className="p-4 max-w-md mx-auto pb-24 dark:bg-gray-900 min-h-screen w-full overflow-x-hidden relative">
       
-      <div className="flex items-center gap-4 mb-6 mt-4">
-        <button onClick={() => navigate(-1)} className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
-          <ArrowLeft size={24} />
+      {/* --- HELP MODAL --- */}
+      {showHelp && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl max-w-sm w-full shadow-2xl relative">
+            <button onClick={() => setShowHelp(false)} className="absolute top-4 right-4 text-gray-400 hover:text-red-500"><X/></button>
+            <h3 className="text-xl font-bold mb-4 dark:text-white flex items-center gap-2"><HelpCircle size={20} className="text-blue-500"/> Quick Guide</h3>
+            <ul className="space-y-4 text-sm text-gray-600 dark:text-gray-300">
+              <li className="flex gap-3">
+                <span className="font-bold text-red-500 bg-red-50 dark:bg-red-900/30 px-2 py-1 rounded">Expense</span>
+                <span>Money leaving your pocket (Food, Travel, Shopping).</span>
+              </li>
+              <li className="flex gap-3">
+                <span className="font-bold text-green-500 bg-green-50 dark:bg-green-900/30 px-2 py-1 rounded">Income</span>
+                <span>Money coming in (Salary, Bonus, Gifts).</span>
+              </li>
+              <li className="flex gap-3">
+                <span className="font-bold text-blue-500 bg-blue-50 dark:bg-blue-900/30 px-2 py-1 rounded">Transfer</span>
+                <span>Moving money between accounts. <br/><br/><strong>Use this for Credit Card Bill Payments</strong> (Bank → Card).</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6 mt-4">
+        <div className="flex items-center gap-4">
+          <button onClick={() => navigate(-1)} className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+            <ArrowLeft size={24} />
+          </button>
+          <h2 className="text-2xl font-bold dark:text-white">Add Transaction</h2>
+        </div>
+        <button onClick={() => setShowHelp(true)} className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-gray-800 rounded-full transition-colors">
+          <HelpCircle size={24} />
         </button>
-        <h2 className="text-2xl font-bold dark:text-white">Add Transaction</h2>
       </div>
       
+      {/* Toggle Buttons */}
       <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl mb-6">
         {['Expense', 'Income', 'Transfer'].map((t) => (
           <button key={t} onClick={() => setType(t)} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${type === t ? 'bg-white shadow-md text-blue-600 dark:bg-gray-700 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}>{t}</button>
@@ -135,6 +167,7 @@ export default function AddTransaction() {
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-5">
         
+        {/* Amount Input */}
         <div className="flex gap-4">
           <div className="relative flex-1">
             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xl">₹</span>
@@ -145,6 +178,7 @@ export default function AddTransaction() {
           </button>
         </div>
 
+        {/* Emoji Picker */}
         {showEmojiPicker && (
           <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-xl border dark:border-gray-700 grid grid-cols-6 gap-2 animate-fade-in">
             {EMOJI_LIST.map(e => (
@@ -160,6 +194,7 @@ export default function AddTransaction() {
           </div>
         )}
         
+        {/* Necessity Toggle (Expenses only) */}
         {type === 'Expense' && (
           <div>
             <label className="text-xs font-bold text-gray-500 uppercase ml-2">Necessity</label>
@@ -171,6 +206,7 @@ export default function AddTransaction() {
           </div>
         )}
 
+        {/* Transfer Logic */}
         {type === 'Transfer' ? (
           <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-xl border dark:border-gray-700 flex flex-col gap-4 relative">
              <div className="relative z-10">
@@ -218,7 +254,6 @@ export default function AddTransaction() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
            <div>
              <label className="text-xs font-bold text-gray-500 uppercase ml-2">Date</label>
-             {/* FIX: Added 'min-w-0 appearance-none' to handle iOS Date Input quirks */}
              <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full min-w-0 appearance-none mt-1 p-3 bg-white dark:bg-gray-800 dark:text-white rounded-xl border border-gray-200 dark:border-gray-700" />
            </div>
            <div>
