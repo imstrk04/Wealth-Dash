@@ -20,7 +20,7 @@ export default function Analytics() {
 
   useEffect(() => {
     const fetchAll = async () => {
-      const { data } = await supabase.from('transactions').select('*, accounts(name, type)').order('date', { ascending: true })
+      const { data } = await supabase.from('transactions').select('*, accounts:accounts!transactions_account_id_fkey(name, type)').order('date', { ascending: true })
       if(data) setData(data)
     }
     fetchAll()
