@@ -232,7 +232,7 @@ export default function AddTransaction() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
            <div><label className="text-xs font-bold text-gray-500 uppercase ml-2">Date</label><input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full mt-1 p-3 bg-white dark:bg-gray-800 dark:text-white rounded-xl border border-gray-200 dark:border-gray-700" /></div>
            <div><label className="text-xs font-bold text-gray-500 uppercase ml-2">Note</label><input type="text" value={description} onChange={e => setDescription(e.target.value)} className="w-full mt-1 p-3 bg-white dark:bg-gray-800 dark:text-white rounded-xl border border-gray-200 dark:border-gray-700" placeholder="Details..." /></div>
         </div>
