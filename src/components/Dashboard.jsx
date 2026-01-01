@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
-import { Wallet, Settings as SettingsIcon, Trash2, Plus, ArrowRight, Pencil } from 'lucide-react' // <--- Added Pencil
+import { Wallet, Settings as SettingsIcon, Trash2, Plus, ArrowRight, Pencil, X, Calendar, CreditCard, FileText, Tag } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 export default function Dashboard() {
@@ -9,31 +9,55 @@ export default function Dashboard() {
   const [userName, setUserName] = useState('User')
   const [accounts, setAccounts] = useState([])
   const [loading, setLoading] = useState(true)
+  
+  // New State for the Detail Modal
+  const [selectedTransaction, setSelectedTransaction] = useState(null)
 
   useEffect(() => {
     fetchData()
   }, [])
 
+  // --- UPDATED SAFER FETCH DATA ---
   const fetchData = async () => {
     setLoading(true)
-    // 1. Get User Profile
-    const user = (await supabase.auth.getUser()).data.user
+    
+    // 1. Get User
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    
+    if (authError || !user) {
+      console.error("🚨 AUTH ERROR:", authError)
+      // If we don't have a user, we can't fetch data. 
+      // Redirecting to login might be smart here in the future.
+      setLoading(false)
+      return 
+    }
+
+    console.log("✅ User Found:", user.id) // Check console: Does this match the user_id in your DB table?
+
+    // 2. Get User Profile
     const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
     if (profile) setUserName(profile.full_name)
 
-    // 2. Get Recent Transactions (Ordered by Date)
-    const { data: transData } = await supabase
+    // 3. Get Recent Transactions
+    const { data: transData, error: transError } = await supabase
       .from('transactions')
-      .select('*, accounts(name)')
+      .select('*, accounts:accounts!transactions_account_id_fkey(name)')
       .order('date', { ascending: false })
       .order('created_at', { ascending: false }) 
       .limit(50) 
     
-    if (transData) setTransactions(transData)
+    if (transError) {
+      console.error("🚨 DATABASE ERROR:", transError) // <--- THIS will tell us the real reason!
+    } else {
+      console.log("✅ Transactions Fetched:", transData)
+      if (transData) setTransactions(transData)
+    }
 
-    // 3. Get Accounts & Calculate Net Worth
-    const { data: accData } = await supabase.from('accounts').select('*')
-    if (accData) {
+    // 4. Get Accounts
+    const { data: accData, error: accError } = await supabase.from('accounts').select('*')
+    if (accError) {
+       console.error("🚨 ACCOUNT ERROR:", accError)
+    } else if (accData) {
       setAccounts(accData)
       const net = accData.reduce((acc, curr) => curr.balance + acc, 0)
       setTotalBalance(net)
@@ -41,30 +65,35 @@ export default function Dashboard() {
     setLoading(false)
   }
 
-  // --- DELETE LOGIC ---
   const handleDelete = async (id) => {
-    if(!confirm("Delete this transaction? Balance will be updated.")) return;
+    if(!confirm("Delete this transaction? Balances will be updated.")) return;
 
-    // 1. Get transaction details
     const { data: t } = await supabase.from('transactions').select('*').eq('id', id).single()
     if (!t) return;
 
-    // 2. Get Account details
+    if (t.type === 'Transfer' && t.target_account_id) {
+       const { data: targetAcc } = await supabase.from('accounts').select('balance').eq('id', t.target_account_id).single()
+       if (targetAcc) {
+         await supabase.from('accounts').update({ balance: targetAcc.balance - t.amount }).eq('id', t.target_account_id)
+       }
+    }
+
     const { data: acc } = await supabase.from('accounts').select('*').eq('id', t.account_id).single()
     let newBalance = Number(acc.balance)
     
-    // 3. Reverse the transaction
-    newBalance = t.type === 'Expense' ? newBalance + t.amount : newBalance - t.amount
+    if (t.type === 'Expense' || t.type === 'Transfer') {
+      newBalance += t.amount
+    } else {
+      newBalance -= t.amount
+    }
 
-    // 4. Update DB
     await supabase.from('accounts').update({ balance: newBalance }).eq('id', t.account_id)
     await supabase.from('transactions').delete().eq('id', id)
     
-    // 5. Refresh Data
     fetchData()
+    setSelectedTransaction(null) // Close modal if open
   }
 
-  // --- HELPER: Group Transactions by Date ---
   const groupedTransactions = transactions.reduce((groups, tx) => {
     const date = tx.date
     if (!groups[date]) {
@@ -74,7 +103,6 @@ export default function Dashboard() {
     return groups
   }, {})
 
-  // --- HELPER: Format Date Header ---
   const formatDateHeader = (dateString) => {
     const date = new Date(dateString)
     const today = new Date()
@@ -88,8 +116,100 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="p-4 max-w-md mx-auto pb-24 fade-in dark:bg-gray-900 min-h-screen">
+    <div className="p-4 max-w-md mx-auto pb-24 fade-in dark:bg-gray-900 min-h-screen relative">
       
+      {/* --- TRANSACTION DETAIL MODAL --- */}
+      {selectedTransaction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setSelectedTransaction(null)}>
+          <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-3xl p-6 shadow-2xl relative" onClick={e => e.stopPropagation()}>
+            
+            {/* Close Button */}
+            <button onClick={() => setSelectedTransaction(null)} className="absolute top-4 right-4 p-2 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-500 hover:bg-gray-200 transition-colors">
+              <X size={20}/>
+            </button>
+
+            {/* Header: Emoji & Amount */}
+            <div className="flex flex-col items-center mb-6">
+              <div className="text-6xl mb-4 bg-gray-50 dark:bg-gray-700 p-6 rounded-full shadow-inner">
+                {selectedTransaction.emoji}
+              </div>
+              <h2 className={`text-3xl font-bold ${selectedTransaction.type === 'Income' ? 'text-green-500' : 'text-black dark:text-white'}`}>
+                {selectedTransaction.type === 'Income' ? '+' : '-'}₹{selectedTransaction.amount.toLocaleString()}
+              </h2>
+              <span className="text-sm font-bold text-gray-400 uppercase tracking-widest mt-1">{selectedTransaction.type}</span>
+            </div>
+
+            {/* Details Grid */}
+            <div className="space-y-4">
+              
+              {/* Category */}
+              <div className="flex items-center gap-4 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-lg"><Tag size={20}/></div>
+                <div>
+                  <p className="text-xs text-gray-400 font-bold uppercase">Category</p>
+                  <p className="font-bold dark:text-white">{selectedTransaction.category}</p>
+                </div>
+              </div>
+
+              {/* Necessity Tag (Only for Expenses) */}
+              {selectedTransaction.type === 'Expense' && selectedTransaction.necessity && (
+                <div className="flex items-center gap-4 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                  <div className="p-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 rounded-lg"><Wallet size={20}/></div>
+                  <div>
+                    <p className="text-xs text-gray-400 font-bold uppercase">Necessity</p>
+                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold mt-1 ${
+                      selectedTransaction.necessity === 'Needs' ? 'bg-red-100 text-red-600' :
+                      selectedTransaction.necessity === 'Wants' ? 'bg-yellow-100 text-yellow-600' :
+                      'bg-green-100 text-green-600'
+                    }`}>
+                      {selectedTransaction.necessity}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Account & Date */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                  <div className="flex items-center gap-2 mb-1 text-gray-400">
+                    <CreditCard size={14}/> <span className="text-xs font-bold uppercase">Account</span>
+                  </div>
+                  <p className="font-bold text-sm dark:text-white truncate">{selectedTransaction.accounts?.name}</p>
+                </div>
+                <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                  <div className="flex items-center gap-2 mb-1 text-gray-400">
+                    <Calendar size={14}/> <span className="text-xs font-bold uppercase">Date</span>
+                  </div>
+                  <p className="font-bold text-sm dark:text-white">{selectedTransaction.date}</p>
+                </div>
+              </div>
+
+              {/* Note */}
+              {selectedTransaction.description && (
+                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                  <div className="flex items-center gap-2 mb-2 text-gray-400">
+                    <FileText size={14}/> <span className="text-xs font-bold uppercase">Note</span>
+                  </div>
+                  <p className="text-sm dark:text-gray-200 italic">"{selectedTransaction.description}"</p>
+                </div>
+              )}
+
+            </div>
+
+            {/* Footer Actions */}
+            <div className="grid grid-cols-2 gap-3 mt-6">
+               <Link to={`/edit-transaction/${selectedTransaction.id}`} className="flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-white font-bold hover:bg-gray-200 transition-colors">
+                 <Pencil size={18}/> Edit
+               </Link>
+               <button onClick={() => handleDelete(selectedTransaction.id)} className="flex items-center justify-center gap-2 py-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 font-bold hover:bg-red-100 transition-colors">
+                 <Trash2 size={18}/> Delete
+               </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
       {/* --- HEADER --- */}
       <div className="flex justify-between items-center mb-6 mt-2">
         <div><h2 className="text-xl font-bold text-gray-800 dark:text-white">Hi, {userName}!</h2></div>
@@ -136,7 +256,6 @@ export default function Dashboard() {
             </p>
             {acc.type === 'Credit Card' && <p className="text-[10px] text-gray-400">Current Debt</p>}
 
-            {/* Credit Utilization Bar */}
             {acc.type === 'Credit Card' && acc.credit_limit > 0 && (
               <div className="mt-3">
                 <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
@@ -151,7 +270,7 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* --- RECENT ACTIVITY (Grouped & Sticky) --- */}
+      {/* --- RECENT ACTIVITY --- */}
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-bold text-gray-800 dark:text-white text-lg">Recent Activity</h3>
         <Link to="/analytics" className="text-blue-500 text-xs font-bold flex items-center gap-1">View Charts <ArrowRight size={14}/></Link>
@@ -168,17 +287,19 @@ export default function Dashboard() {
         ) : (
           Object.keys(groupedTransactions).map((date) => (
             <div key={date} className="animate-fade-in">
-              {/* Sticky Header */}
               <div className="sticky top-0 bg-white/90 dark:bg-gray-900/95 backdrop-blur-sm py-2 z-10 border-b border-gray-100 dark:border-gray-800 mb-2">
                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider pl-1">
                   {formatDateHeader(date)}
                 </h3>
               </div>
               
-              {/* Transactions List */}
               <div className="space-y-3">
                 {groupedTransactions[date].map((t) => (
-                  <div key={t.id} className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-50 dark:border-gray-700/50 flex justify-between items-center group">
+                  <div 
+                    key={t.id} 
+                    onClick={() => setSelectedTransaction(t)} // <--- CLICK TO OPEN MODAL
+                    className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-50 dark:border-gray-700/50 flex justify-between items-center group cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                  >
                     <div className="flex items-center gap-4">
                       <div className="text-2xl w-10 h-10 flex items-center justify-center bg-gray-50 dark:bg-gray-700 rounded-full">
                         {t.emoji || (t.type === 'Income' ? '💰' : '💸')}
@@ -197,13 +318,19 @@ export default function Dashboard() {
                         <span className="text-[10px] font-bold text-gray-400 uppercase">{t.type}</span>
                       </div>
                       
-                      {/* Edit Button */}
-                      <Link to={`/edit-transaction/${t.id}`} className="p-2 text-gray-300 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
+                      {/* Buttons: STOP PROPAGATION ensures modal doesn't open when you click these */}
+                      <Link 
+                        to={`/edit-transaction/${t.id}`} 
+                        onClick={(e) => e.stopPropagation()} 
+                        className="p-2 text-gray-300 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                      >
                         <Pencil size={16}/>
                       </Link>
 
-                      {/* Delete Button */}
-                      <button onClick={() => handleDelete(t.id)} className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); handleDelete(t.id); }} 
+                        className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                      >
                         <Trash2 size={16}/>
                       </button>
                     </div>

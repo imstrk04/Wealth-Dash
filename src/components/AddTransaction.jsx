@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowDown, ArrowLeft, HelpCircle, X } from 'lucide-react' // Added HelpCircle, X
+import { ArrowDown, ArrowLeft, HelpCircle, X } from 'lucide-react'
 
 // The Curated List
 const EMOJI_LIST = ['🍔', '🍕', '🍺', '☕', '🚗', '🚕', '✈️', '⛽', '🛍️', '🎁', '💡', '🎬', '💊', '📚', '💰', '💸', '🏠', '🐶', '💻', '🏋️', '🏥', '🚌', '👶', '👗']
 
 export default function AddTransaction() {
   const navigate = useNavigate()
-  const [showHelp, setShowHelp] = useState(false) // State for Help Modal
+  const [showHelp, setShowHelp] = useState(false)
   
   const [amount, setAmount] = useState('')
   const [description, setDescription] = useState('')
@@ -82,15 +82,27 @@ export default function AddTransaction() {
       await supabase.from('categories').insert({ user_id: user.id, name: newCatName, type })
     }
 
+    // --- TRANSFER LOGIC ---
     if (type === 'Transfer') {
       if (accountId === toAccountId) return alert("Source and Dest account cannot be same")
+      
       const srcAcc = accounts.find(a => a.id === accountId)
       await supabase.from('accounts').update({ balance: srcAcc.balance - val }).eq('id', accountId)
+      
       const destAcc = accounts.find(a => a.id === toAccountId)
       await supabase.from('accounts').update({ balance: destAcc.balance + val }).eq('id', toAccountId)
+      
+      // SAVE WITH TARGET ID
       await supabase.from('transactions').insert({
-        user_id: user.id, account_id: accountId, amount: val, type: 'Transfer',
-        description: `Transfer to ${destAcc.name}`, category: 'Transfer', date, emoji: '🔄'
+        user_id: user.id, 
+        account_id: accountId, 
+        target_account_id: toAccountId, // <--- NEW: Saves the destination account
+        amount: val, 
+        type: 'Transfer',
+        description: `Transfer to ${destAcc.name}`, 
+        category: 'Transfer', 
+        date, 
+        emoji: '🔄'
       })
       alert('Transfer Successful!'); setAmount(''); navigate(-1); return 
     }
