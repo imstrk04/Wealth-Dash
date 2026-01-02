@@ -10,14 +10,13 @@ export default function Dashboard() {
   const [accounts, setAccounts] = useState([])
   const [loading, setLoading] = useState(true)
   
-  // New State for the Detail Modal
+  // State for the Detail Modal
   const [selectedTransaction, setSelectedTransaction] = useState(null)
 
   useEffect(() => {
     fetchData()
   }, [])
 
-  // --- UPDATED SAFER FETCH DATA ---
   const fetchData = async () => {
     setLoading(true)
     
@@ -26,13 +25,9 @@ export default function Dashboard() {
     
     if (authError || !user) {
       console.error("🚨 AUTH ERROR:", authError)
-      // If we don't have a user, we can't fetch data. 
-      // Redirecting to login might be smart here in the future.
       setLoading(false)
       return 
     }
-
-    console.log("✅ User Found:", user.id) // Check console: Does this match the user_id in your DB table?
 
     // 2. Get User Profile
     const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
@@ -47,9 +42,8 @@ export default function Dashboard() {
       .limit(50) 
     
     if (transError) {
-      console.error("🚨 DATABASE ERROR:", transError) // <--- THIS will tell us the real reason!
+      console.error("🚨 DATABASE ERROR:", transError)
     } else {
-      console.log("✅ Transactions Fetched:", transData)
       if (transData) setTransactions(transData)
     }
 
@@ -91,7 +85,7 @@ export default function Dashboard() {
     await supabase.from('transactions').delete().eq('id', id)
     
     fetchData()
-    setSelectedTransaction(null) // Close modal if open
+    setSelectedTransaction(null)
   }
 
   const groupedTransactions = transactions.reduce((groups, tx) => {
@@ -116,19 +110,16 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="p-4 max-w-md mx-auto pb-24 fade-in dark:bg-gray-900 min-h-screen relative">
+    <div className="p-4 max-w-md mx-auto pb-24 fade-in dark:bg-gray-900 min-h-screen relative text-black dark:text-white">
       
       {/* --- TRANSACTION DETAIL MODAL --- */}
       {selectedTransaction && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setSelectedTransaction(null)}>
           <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-3xl p-6 shadow-2xl relative" onClick={e => e.stopPropagation()}>
-            
-            {/* Close Button */}
             <button onClick={() => setSelectedTransaction(null)} className="absolute top-4 right-4 p-2 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-500 hover:bg-gray-200 transition-colors">
               <X size={20}/>
             </button>
 
-            {/* Header: Emoji & Amount */}
             <div className="flex flex-col items-center mb-6">
               <div className="text-6xl mb-4 bg-gray-50 dark:bg-gray-700 p-6 rounded-full shadow-inner">
                 {selectedTransaction.emoji}
@@ -139,19 +130,15 @@ export default function Dashboard() {
               <span className="text-sm font-bold text-gray-400 uppercase tracking-widest mt-1">{selectedTransaction.type}</span>
             </div>
 
-            {/* Details Grid */}
             <div className="space-y-4">
-              
-              {/* Category */}
               <div className="flex items-center gap-4 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
                 <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-lg"><Tag size={20}/></div>
                 <div>
                   <p className="text-xs text-gray-400 font-bold uppercase">Category</p>
-                  <p className="font-bold dark:text-white">{selectedTransaction.category}</p>
+                  <p className="font-bold">{selectedTransaction.category}</p>
                 </div>
               </div>
 
-              {/* Necessity Tag (Only for Expenses) */}
               {selectedTransaction.type === 'Expense' && selectedTransaction.necessity && (
                 <div className="flex items-center gap-4 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
                   <div className="p-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 rounded-lg"><Wallet size={20}/></div>
@@ -168,35 +155,31 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {/* Account & Date */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
                   <div className="flex items-center gap-2 mb-1 text-gray-400">
                     <CreditCard size={14}/> <span className="text-xs font-bold uppercase">Account</span>
                   </div>
-                  <p className="font-bold text-sm dark:text-white truncate">{selectedTransaction.accounts?.name}</p>
+                  <p className="font-bold text-sm truncate">{selectedTransaction.accounts?.name}</p>
                 </div>
                 <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
                   <div className="flex items-center gap-2 mb-1 text-gray-400">
                     <Calendar size={14}/> <span className="text-xs font-bold uppercase">Date</span>
                   </div>
-                  <p className="font-bold text-sm dark:text-white">{selectedTransaction.date}</p>
+                  <p className="font-bold text-sm">{selectedTransaction.date}</p>
                 </div>
               </div>
 
-              {/* Note */}
               {selectedTransaction.description && (
                 <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
                   <div className="flex items-center gap-2 mb-2 text-gray-400">
                     <FileText size={14}/> <span className="text-xs font-bold uppercase">Note</span>
                   </div>
-                  <p className="text-sm dark:text-gray-200 italic">"{selectedTransaction.description}"</p>
+                  <p className="text-sm italic">"{selectedTransaction.description}"</p>
                 </div>
               )}
-
             </div>
 
-            {/* Footer Actions */}
             <div className="grid grid-cols-2 gap-3 mt-6">
                <Link to={`/edit-transaction/${selectedTransaction.id}`} className="flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-white font-bold hover:bg-gray-200 transition-colors">
                  <Pencil size={18}/> Edit
@@ -205,14 +188,13 @@ export default function Dashboard() {
                  <Trash2 size={18}/> Delete
                </button>
             </div>
-
           </div>
         </div>
       )}
 
       {/* --- HEADER --- */}
       <div className="flex justify-between items-center mb-6 mt-2">
-        <div><h2 className="text-xl font-bold text-gray-800 dark:text-white">Hi, {userName}!</h2></div>
+        <div><h2 className="text-xl font-bold">Hi, {userName}!</h2></div>
         <Link to="/settings" className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-600 dark:text-white hover:bg-gray-200 transition-colors"><SettingsIcon size={20}/></Link>
       </div>
 
@@ -231,30 +213,31 @@ export default function Dashboard() {
       </div>
       
       <div className="flex gap-4 overflow-x-auto no-scrollbar mb-8 pb-2">
+        {/* Add Account Button */}
         <Link to="/add-account" className="min-w-[80px] flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-800 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-2xl p-4 text-gray-400 hover:text-blue-500 hover:border-blue-500 transition-all">
           <Plus size={24} />
           <span className="text-[10px] font-bold mt-1">Add</span>
         </Link>
 
+        {/* Existing Accounts */}
         {accounts.map(acc => (
           <div key={acc.id} className="min-w-[160px] bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 relative group flex-shrink-0">
             <div className="flex justify-between items-start mb-2">
                <p className="text-xs font-bold text-gray-500 dark:text-gray-400 truncate w-24">{acc.name}</p>
-               {acc.type === 'Credit Card' && (
-                 <button onClick={async () => {
-                   const newLim = prompt("Enter new Credit Limit:", acc.credit_limit);
-                   if(newLim) {
-                     await supabase.from('accounts').update({credit_limit: newLim}).eq('id', acc.id);
-                     fetchData();
-                   }
-                 }} className="text-gray-300 hover:text-blue-500"><SettingsIcon size={12}/></button>
-               )}
+               <Link to="/add-account" state={{ account: acc }} className="text-gray-300 hover:text-blue-500 transition-colors">
+                 <Pencil size={14}/>
+               </Link>
             </div>
             
             <p className={`font-bold text-xl ${acc.type === 'Credit Card' ? 'text-red-500' : 'text-green-600'}`}>
-              {acc.type === 'Credit Card' ? '' : ''}₹{Math.abs(acc.balance).toLocaleString()}
+              ₹{Math.abs(acc.balance).toLocaleString()}
             </p>
-            {acc.type === 'Credit Card' && <p className="text-[10px] text-gray-400">Current Debt</p>}
+            
+            {acc.type === 'Credit Card' ? (
+              <p className="text-[10px] text-gray-400">Current Debt</p>
+            ) : (
+              <p className="text-[10px] text-gray-400">Available Balance</p>
+            )}
 
             {acc.type === 'Credit Card' && acc.credit_limit > 0 && (
               <div className="mt-3">
@@ -282,7 +265,7 @@ export default function Dashboard() {
         ) : transactions.length === 0 ? (
           <div className="text-center py-10 opacity-50">
             <p className="text-4xl mb-2">🍃</p>
-            <p className="text-sm dark:text-gray-400">No transactions yet.</p>
+            <p className="text-sm">No transactions yet.</p>
           </div>
         ) : (
           Object.keys(groupedTransactions).map((date) => (
@@ -297,7 +280,7 @@ export default function Dashboard() {
                 {groupedTransactions[date].map((t) => (
                   <div 
                     key={t.id} 
-                    onClick={() => setSelectedTransaction(t)} // <--- CLICK TO OPEN MODAL
+                    onClick={() => setSelectedTransaction(t)} 
                     className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-50 dark:border-gray-700/50 flex justify-between items-center group cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                   >
                     <div className="flex items-center gap-4">
@@ -305,32 +288,24 @@ export default function Dashboard() {
                         {t.emoji || (t.type === 'Income' ? '💰' : '💸')}
                       </div>
                       <div>
-                        <p className="font-bold text-gray-800 dark:text-white text-sm">{t.category}</p>
+                        <p className="font-bold text-sm">{t.category}</p>
                         <p className="text-xs text-gray-400 w-28 truncate">{t.description || t.accounts?.name}</p>
                       </div>
                     </div>
                     
                     <div className="flex items-center gap-2">
                       <div className="text-right mr-2">
-                        <span className={`block font-bold text-base ${t.type === 'Income' ? 'text-green-500' : 'text-gray-800 dark:text-white'}`}>
+                        <span className={`block font-bold text-base ${t.type === 'Income' ? 'text-green-500' : ''}`}>
                           {t.type === 'Income' ? '+' : '-'}₹{t.amount}
                         </span>
                         <span className="text-[10px] font-bold text-gray-400 uppercase">{t.type}</span>
                       </div>
                       
-                      {/* Buttons: STOP PROPAGATION ensures modal doesn't open when you click these */}
-                      <Link 
-                        to={`/edit-transaction/${t.id}`} 
-                        onClick={(e) => e.stopPropagation()} 
-                        className="p-2 text-gray-300 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                      >
+                      <Link to={`/edit-transaction/${t.id}`} onClick={(e) => e.stopPropagation()} className="p-2 text-gray-300 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
                         <Pencil size={16}/>
                       </Link>
 
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); handleDelete(t.id); }} 
-                        className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                      >
+                      <button onClick={(e) => { e.stopPropagation(); handleDelete(t.id); }} className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
                         <Trash2 size={16}/>
                       </button>
                     </div>
@@ -341,7 +316,6 @@ export default function Dashboard() {
           ))
         )}
       </div>
-      
     </div>
   )
 }

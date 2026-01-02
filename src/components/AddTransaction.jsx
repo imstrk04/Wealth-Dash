@@ -1,13 +1,18 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { supabase } from '../supabaseClient'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowDown, ArrowLeft, HelpCircle, X } from 'lucide-react'
+import { ArrowDown, ArrowLeft, HelpCircle, X, SmilePlus, Search } from 'lucide-react'
 
-// The Curated List
-const EMOJI_LIST = ['🍔', '🍕', '🍺', '☕', '🚗', '🚕', '✈️', '⛽', '🛍️', '🎁', '💡', '🎬', '💊', '📚', '💰', '💸', '🏠', '🐶', '💻', '🏋️', '🏥', '🚌', '👶', '👗']
+// Expanded Curated List for better searching
+const EMOJI_LIST = [
+  '🍔', '🍕', '🍺', '☕', '🚗', '🚕', '✈️', '⛽', '🛍️', '🎁', '💡', '🎬', '💊', '📚', 
+  '💰', '💸', '🏠', '🐶', '💻', '🏋️', '🏥', '🚌', '👶', '👗', '🥪', '🥗', '🍦', '🍩',
+  '🚲', '🚢', '🚆', '🏨', '🔋', '📱', '🎮', '🎧', '🍉', '🍎', '🥦', '🍿', '🎸', '🎨'
+]
 
 export default function AddTransaction() {
   const navigate = useNavigate()
+  const emojiInputRef = useRef(null)
   const [showHelp, setShowHelp] = useState(false)
   
   const [amount, setAmount] = useState('')
@@ -15,10 +20,10 @@ export default function AddTransaction() {
   const [type, setType] = useState('Expense')
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   
-  // Category & Emoji State
   const [category, setCategory] = useState('')
   const [emoji, setEmoji] = useState('💸') 
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+  const [emojiSearch, setEmojiSearch] = useState('') // New search state
 
   const [categories, setCategories] = useState([])
   const [isCustomCat, setIsCustomCat] = useState(false)
@@ -31,22 +36,20 @@ export default function AddTransaction() {
   const DEFAULT_EXPENSE = ['Food', 'Transport', 'Shopping', 'Bills', 'Entertainment', 'Health', 'Education']
   const DEFAULT_INCOME = ['Salary', 'Freelance', 'Investments', 'Gift']
 
+  // Filter emojis based on search
+  const filteredEmojis = useMemo(() => {
+    return EMOJI_LIST.filter(e => emojiSearch === '' || e.includes(emojiSearch))
+  }, [emojiSearch])
+
   useEffect(() => {
     fetchAccounts()
     fetchCategories()
   }, [])
 
   useEffect(() => {
-    if (type === 'Expense') { 
-      setCategory('Food'); 
-      setEmoji('🍔'); 
-    } else if (type === 'Income') { 
-      setCategory('Salary'); 
-      setEmoji('💰'); 
-    } else { 
-      setCategory('Transfer'); 
-      setEmoji('🔄'); 
-    }
+    if (type === 'Expense') { setCategory('Food'); setEmoji('🍔'); } 
+    else if (type === 'Income') { setCategory('Salary'); setEmoji('💰'); } 
+    else { setCategory('Transfer'); setEmoji('🔄'); }
     setIsCustomCat(false)
     setShowEmojiPicker(false)
   }, [type])
@@ -69,11 +72,20 @@ export default function AddTransaction() {
     ? [...DEFAULT_EXPENSE, ...categories.filter(c => c.type === 'Expense').map(c => c.name), '+ Add New'] 
     : [...DEFAULT_INCOME, ...categories.filter(c => c.type === 'Income').map(c => c.name), '+ Add New']
 
+  const handleNativeEmojiInput = (e) => {
+    const val = e.target.value;
+    if (val) {
+      setEmoji(val.slice(-2).trim() || val.slice(-1));
+      setShowEmojiPicker(false);
+      e.target.value = '';
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!amount || !accountId) return alert("Please fill details")
     const val = parseFloat(amount)
-    const user = (await supabase.auth.getUser()).data.user
+    const { data: { user } } = await supabase.auth.getUser()
 
     let finalCategory = category
     if (category === '+ Add New') {
@@ -82,173 +94,155 @@ export default function AddTransaction() {
       await supabase.from('categories').insert({ user_id: user.id, name: newCatName, type })
     }
 
-    // --- TRANSFER LOGIC ---
     if (type === 'Transfer') {
       if (accountId === toAccountId) return alert("Source and Dest account cannot be same")
-      
       const srcAcc = accounts.find(a => a.id === accountId)
-      await supabase.from('accounts').update({ balance: srcAcc.balance - val }).eq('id', accountId)
-      
       const destAcc = accounts.find(a => a.id === toAccountId)
+      await supabase.from('accounts').update({ balance: srcAcc.balance - val }).eq('id', accountId)
       await supabase.from('accounts').update({ balance: destAcc.balance + val }).eq('id', toAccountId)
       
-      // SAVE WITH TARGET ID
       await supabase.from('transactions').insert({
-        user_id: user.id, 
-        account_id: accountId, 
-        target_account_id: toAccountId, // <--- NEW: Saves the destination account
-        amount: val, 
-        type: 'Transfer',
-        description: `Transfer to ${destAcc.name}`, 
-        category: 'Transfer', 
-        date, 
-        emoji: '🔄'
+        user_id: user.id, account_id: accountId, target_account_id: toAccountId,
+        amount: val, type: 'Transfer', description: `Transfer to ${destAcc.name}`, 
+        category: 'Transfer', date, emoji: '🔄'
       })
-      alert('Transfer Successful!'); setAmount(''); navigate(-1); return 
+      alert('Transfer Successful!'); navigate(-1); return 
     }
 
     const selectedAcc = accounts.find(a => a.id === accountId)
-    if (type === 'Expense' && selectedAcc.type !== 'Credit Card' && val > selectedAcc.balance) {
-      return alert("Insufficient Funds")
-    }
-
     const { error } = await supabase.from('transactions').insert({ 
       user_id: user.id, account_id: accountId, amount: val, description, 
       category: finalCategory, type, date, necessity: type === 'Expense' ? necessity : null,
       emoji: emoji
     })
     
-    if (error) { alert('Error'); return }
-
-    let newBalance = Number(selectedAcc.balance)
-    newBalance = type === 'Expense' ? newBalance - val : newBalance + val
-    
-    await supabase.from('accounts').update({ balance: newBalance }).eq('id', accountId)
-    alert('Saved!')
-    setAmount('')
-    setIsCustomCat(false)
-    navigate(-1)
+    if (!error) {
+      let newBalance = type === 'Expense' ? Number(selectedAcc.balance) - val : Number(selectedAcc.balance) + val
+      await supabase.from('accounts').update({ balance: newBalance }).eq('id', accountId)
+      alert('Saved!')
+      navigate(-1)
+    }
   }
 
   return (
-    <div className="p-4 max-w-md mx-auto pb-24 dark:bg-gray-900 min-h-screen w-full overflow-x-hidden relative">
+    <div className="p-4 max-w-md mx-auto pb-24 dark:bg-gray-900 min-h-screen relative">
       
-      {/* --- HELP MODAL --- */}
-      {showHelp && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl max-w-sm w-full shadow-2xl relative">
-            <button onClick={() => setShowHelp(false)} className="absolute top-4 right-4 text-gray-400 hover:text-red-500"><X/></button>
-            <h3 className="text-xl font-bold mb-4 dark:text-white flex items-center gap-2"><HelpCircle size={20} className="text-blue-500"/> Quick Guide</h3>
-            <ul className="space-y-4 text-sm text-gray-600 dark:text-gray-300">
-              <li className="flex gap-3">
-                <span className="font-bold text-red-500 bg-red-50 dark:bg-red-900/30 px-2 py-1 rounded">Expense</span>
-                <span>Money leaving your pocket (Food, Travel, Shopping).</span>
-              </li>
-              <li className="flex gap-3">
-                <span className="font-bold text-green-500 bg-green-50 dark:bg-green-900/30 px-2 py-1 rounded">Income</span>
-                <span>Money coming in (Salary, Bonus, Gifts).</span>
-              </li>
-              <li className="flex gap-3">
-                <span className="font-bold text-blue-500 bg-blue-50 dark:bg-blue-900/30 px-2 py-1 rounded">Transfer</span>
-                <span>Moving money between accounts. <br/><br/><strong>Use this for Credit Card Bill Payments</strong> (Bank → Card).</span>
-              </li>
-            </ul>
-          </div>
-        </div>
-      )}
+      <input 
+        ref={emojiInputRef}
+        type="text" 
+        className="fixed -top-40 left-0 opacity-0 pointer-events-none" 
+        onChange={handleNativeEmojiInput}
+      />
 
-      {/* Header */}
       <div className="flex items-center justify-between mb-6 mt-4">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate(-1)} className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+          <button onClick={() => navigate(-1)} className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-600 dark:text-gray-300">
             <ArrowLeft size={24} />
           </button>
           <h2 className="text-2xl font-bold dark:text-white">Add Transaction</h2>
         </div>
-        <button onClick={() => setShowHelp(true)} className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-gray-800 rounded-full transition-colors">
+        <button onClick={() => setShowHelp(true)} className="p-2 text-blue-600 dark:text-blue-400">
           <HelpCircle size={24} />
         </button>
       </div>
       
-      {/* Toggle Buttons */}
       <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl mb-6">
         {['Expense', 'Income', 'Transfer'].map((t) => (
-          <button key={t} onClick={() => setType(t)} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${type === t ? 'bg-white shadow-md text-blue-600 dark:bg-gray-700 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}>{t}</button>
+          <button key={t} onClick={() => setType(t)} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${type === t ? 'bg-white shadow-md text-blue-600 dark:bg-gray-700 dark:text-blue-400' : 'text-gray-500'}`}>{t}</button>
         ))}
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-5">
         
-        {/* Amount Input */}
         <div className="flex gap-4">
           <div className="relative flex-1">
             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xl">₹</span>
-            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} className="w-full pl-10 pr-4 py-4 text-3xl font-bold outline-none bg-white dark:bg-gray-800 dark:text-white rounded-2xl border-2 border-transparent focus:border-blue-500 transition-all" placeholder="0" />
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} className="w-full pl-10 pr-4 py-4 text-3xl font-bold bg-white dark:bg-gray-800 dark:text-white rounded-2xl shadow-sm outline-none" placeholder="0" />
           </div>
-          <button type="button" onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="w-20 bg-white dark:bg-gray-800 rounded-2xl text-3xl flex items-center justify-center border-2 border-transparent hover:border-blue-500 transition-all shadow-sm">
+          <button type="button" onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="w-20 bg-white dark:bg-gray-800 rounded-2xl text-3xl flex items-center justify-center shadow-sm border-2 border-transparent active:border-blue-500">
             {emoji}
           </button>
         </div>
 
-        {/* Emoji Picker */}
+        {/* --- STYLED EMOJI PICKER --- */}
         {showEmojiPicker && (
-          <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-xl border dark:border-gray-700 grid grid-cols-6 gap-2 animate-fade-in">
-            {EMOJI_LIST.map(e => (
-              <button 
-                key={e} 
-                type="button" 
-                onClick={() => { setEmoji(e); setShowEmojiPicker(false) }} 
-                className={`text-2xl p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors ${emoji === e ? 'bg-blue-100 dark:bg-gray-600' : ''}`}
-              >
-                {e}
-              </button>
-            ))}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border dark:border-gray-700 overflow-hidden animate-fade-in">
+            {/* Search Header */}
+            <div className="p-3 border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
+              <div className="relative">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input 
+                  type="text" 
+                  placeholder="Search" 
+                  value={emojiSearch}
+                  onChange={(e) => setEmojiSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 bg-gray-200/50 dark:bg-gray-900 rounded-lg text-sm outline-none dark:text-white"
+                />
+              </div>
+            </div>
+
+            <div className="p-4 max-h-60 overflow-y-auto">
+              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3">Recently Used & Curated</p>
+              <div className="grid grid-cols-6 gap-2">
+                {/* Native Trigger */}
+                <button 
+                  type="button" 
+                  onClick={() => emojiInputRef.current.focus()} 
+                  className="flex flex-col items-center justify-center bg-blue-50 dark:bg-blue-900/20 text-blue-600 rounded-xl p-2 border border-blue-100 dark:border-blue-800/50"
+                >
+                  <SmilePlus size={20} />
+                  <span className="text-[9px] font-bold mt-1">System</span>
+                </button>
+
+                {filteredEmojis.map(e => (
+                  <button 
+                    key={e} 
+                    type="button" 
+                    onClick={() => { setEmoji(e); setShowEmojiPicker(false); setEmojiSearch('') }} 
+                    className={`text-2xl p-2 rounded-xl transition-all active:scale-90 hover:bg-gray-100 dark:hover:bg-gray-700 ${emoji === e ? 'bg-blue-100 dark:bg-blue-900/40' : ''}`}
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            <div className="px-4 py-3 bg-gray-50 dark:bg-gray-900/50 border-t dark:border-gray-700 flex items-center gap-3">
+               <div className="text-3xl">{emoji}</div>
+               <div className="text-xs font-medium text-gray-500 dark:text-gray-400">Current Selection</div>
+            </div>
           </div>
         )}
-        
-        {/* Necessity Toggle (Expenses only) */}
+
+        {/* ... Rest of form ... */}
         {type === 'Expense' && (
           <div>
             <label className="text-xs font-bold text-gray-500 uppercase ml-2">Necessity</label>
             <div className="flex gap-2 mt-1">
               {['Needs', 'Wants', 'Savings'].map(opt => (
-                <button type="button" key={opt} onClick={() => setNecessity(opt)} className={`flex-1 py-2 rounded-xl border text-sm font-bold ${necessity === opt ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-gray-700 dark:text-blue-300' : 'bg-white border-gray-200 text-gray-500 dark:bg-gray-800 dark:border-gray-700'}`}>{opt}</button>
+                <button type="button" key={opt} onClick={() => setNecessity(opt)} className={`flex-1 py-2 rounded-xl border text-sm font-bold ${necessity === opt ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-gray-700 dark:text-blue-300' : 'bg-white text-gray-500 dark:bg-gray-800 dark:border-gray-700'}`}>{opt}</button>
               ))}
             </div>
           </div>
         )}
 
-        {/* Transfer Logic */}
         {type === 'Transfer' ? (
-          <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-xl border dark:border-gray-700 flex flex-col gap-4 relative">
-             <div className="relative z-10">
-               <label className="text-[10px] font-bold text-gray-500 uppercase ml-1">From Account</label>
-               <select className="w-full mt-1 p-3 bg-white dark:bg-gray-900 dark:text-white rounded-xl border border-gray-200 dark:border-gray-700 h-12" value={accountId} onChange={e => setAccountId(e.target.value)}>
-                 {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-               </select>
-             </div>
-
-             <div className="flex justify-center -my-2 relative z-20">
-               <div className="bg-blue-100 dark:bg-gray-700 p-2 rounded-full border-4 border-white dark:border-gray-800 text-blue-600 dark:text-blue-400">
-                 <ArrowDown size={20} />
-               </div>
-             </div>
-
-             <div className="relative z-10">
-               <label className="text-[10px] font-bold text-gray-500 uppercase ml-1">To Account</label>
-               <select className="w-full mt-1 p-3 bg-white dark:bg-gray-900 dark:text-white rounded-xl border border-gray-200 dark:border-gray-700 h-12" value={toAccountId} onChange={e => setToAccountId(e.target.value)}>
-                 {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-               </select>
-             </div>
+          <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-xl border dark:border-gray-700 flex flex-col gap-4">
+             <select className="w-full p-3 dark:bg-gray-900 dark:text-white rounded-xl" value={accountId} onChange={e => setAccountId(e.target.value)}>
+               {accounts.map(a => <option key={a.id} value={a.id}>From: {a.name}</option>)}
+             </select>
+             <div className="flex justify-center -my-2"><ArrowDown className="text-blue-500"/></div>
+             <select className="w-full p-3 dark:bg-gray-900 dark:text-white rounded-xl" value={toAccountId} onChange={e => setToAccountId(e.target.value)}>
+               {accounts.map(a => <option key={a.id} value={a.id}>To: {a.name}</option>)}
+             </select>
           </div>
         ) : (
           <div>
             <label className="text-xs font-bold text-gray-500 uppercase ml-2">Account</label>
             <div className="flex gap-2 overflow-x-auto mt-2 no-scrollbar">
               {accounts.map(acc => (
-                <button type="button" key={acc.id} onClick={() => setAccountId(acc.id)} className={`p-3 rounded-xl border-2 min-w-[100px] text-sm font-bold ${accountId === acc.id ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-600 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300'}`}>{acc.name}</button>
+                <button type="button" key={acc.id} onClick={() => setAccountId(acc.id)} className={`p-3 rounded-xl border-2 min-w-[100px] text-sm font-bold ${accountId === acc.id ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white dark:bg-gray-800 dark:border-gray-700'}`}>{acc.name}</button>
               ))}
-               <Link to="/add-account" className="p-3 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-700 min-w-[50px] flex items-center justify-center text-gray-400">+</Link>
             </div>
           </div>
         )}
@@ -256,26 +250,26 @@ export default function AddTransaction() {
         {type !== 'Transfer' && (
           <div>
             <label className="text-xs font-bold text-gray-500 uppercase ml-2">Category</label>
-            <select value={category} onChange={e => { setCategory(e.target.value); setIsCustomCat(e.target.value === '+ Add New'); }} className="w-full mt-1 p-3 bg-white dark:bg-gray-800 dark:text-white rounded-xl h-12 border border-gray-200 dark:border-gray-700">
+            <select value={category} onChange={e => { setCategory(e.target.value); setIsCustomCat(e.target.value === '+ Add New'); }} className="w-full mt-1 p-3 dark:bg-gray-800 dark:text-white rounded-xl border dark:border-gray-700">
                 {activeCategories.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
-            {isCustomCat && <input type="text" placeholder="Enter new category..." value={newCatName} onChange={e => setNewCatName(e.target.value)} className="w-full mt-3 p-3 bg-blue-50 border border-blue-200 rounded-xl h-12 outline-none text-blue-800" />}
+            {isCustomCat && <input type="text" placeholder="Enter new category..." value={newCatName} onChange={e => setNewCatName(e.target.value)} className="w-full mt-3 p-3 bg-blue-50 border border-blue-200 rounded-xl outline-none" />}
           </div>
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
            <div>
              <label className="text-xs font-bold text-gray-500 uppercase ml-2">Date</label>
-             <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full min-w-0 appearance-none mt-1 p-3 bg-white dark:bg-gray-800 dark:text-white rounded-xl border border-gray-200 dark:border-gray-700" />
+             <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full mt-1 p-3 dark:bg-gray-800 dark:text-white rounded-xl border dark:border-gray-700" />
            </div>
            <div>
              <label className="text-xs font-bold text-gray-500 uppercase ml-2">Note</label>
-             <input type="text" value={description} onChange={e => setDescription(e.target.value)} className="w-full mt-1 p-3 bg-white dark:bg-gray-800 dark:text-white rounded-xl border border-gray-200 dark:border-gray-700" placeholder="Details..." />
+             <input type="text" value={description} onChange={e => setDescription(e.target.value)} className="w-full mt-1 p-3 dark:bg-gray-800 dark:text-white rounded-xl border dark:border-gray-700" placeholder="Details..." />
            </div>
         </div>
 
-        <button className="bg-blue-600 text-white py-4 rounded-xl font-bold text-lg mt-4 shadow-xl mb-10">
-          {type === 'Transfer' ? 'Transfer Funds' : 'Save Transaction'}
+        <button className="bg-blue-600 text-white py-4 rounded-xl font-bold text-lg mt-4 shadow-xl mb-10 transition-all active:scale-95">
+          Save Transaction
         </button>
       </form>
     </div>
