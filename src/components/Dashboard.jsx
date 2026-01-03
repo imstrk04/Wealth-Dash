@@ -174,6 +174,21 @@ export default function Dashboard() {
               ₹{Math.abs(acc.balance).toLocaleString()}
             </p>
             <p className="text-[10px] text-gray-400">{acc.type === 'Credit Card' ? 'Current Debt' : 'Available Balance'}</p>
+
+            {/* --- NEW: Credit Utilization Bar --- */}
+            {acc.type === 'Credit Card' && parseFloat(acc.credit_limit) > 0 && (
+              <div className="mt-3 animate-fade-in">
+                <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
+                  <div 
+                    className={`h-1.5 rounded-full ${Math.abs(acc.balance)/parseFloat(acc.credit_limit) > 0.8 ? 'bg-red-500' : 'bg-blue-500'}`} 
+                    style={{ width: `${Math.min((Math.abs(acc.balance)/parseFloat(acc.credit_limit))*100, 100)}%` }}
+                  ></div>
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1 font-medium">
+                  {Math.round((Math.abs(acc.balance)/parseFloat(acc.credit_limit))*100)}% Used of {parseInt(parseFloat(acc.credit_limit)/1000)}k
+                </p>
+              </div>
+            )}
           </div>
         ))}
       </div>
