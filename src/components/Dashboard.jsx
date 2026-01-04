@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
-import { Wallet, Settings as SettingsIcon, Trash2, Plus, ArrowRight, Pencil, X, Calendar, CreditCard, FileText, Tag } from 'lucide-react'
+import { Wallet, Settings as SettingsIcon, Trash2, Plus, ArrowRight, Pencil, X, Calendar, CreditCard, FileText, Tag, BarChart3 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 export default function Dashboard() {
@@ -38,7 +38,6 @@ export default function Dashboard() {
   const handleDelete = async (id) => {
     if(!confirm("Delete this transaction? Balances will be updated.")) return;
 
-    // Enforcement: Verify record exists on server before logic
     const { data: t, error: fetchErr } = await supabase.from('transactions').select('*').eq('id', id).single()
     if (fetchErr || !t) {
       alert("Transaction not found on server. Refreshing list.")
@@ -62,7 +61,7 @@ export default function Dashboard() {
 
       await supabase.from('transactions').delete().eq('id', id)
       setSelectedTransaction(null)
-      fetchData() // Hard refresh from server to ensure sync
+      fetchData()
     } catch (err) {
       console.error(err)
       alert("Failed to delete.")
@@ -104,7 +103,9 @@ export default function Dashboard() {
               </h2>
               <span className="text-sm font-bold text-gray-400 uppercase tracking-widest mt-1">{selectedTransaction.type}</span>
             </div>
+            
             <div className="space-y-4">
+              {/* Category */}
               <div className="flex items-center gap-4 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
                 <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-lg"><Tag size={20}/></div>
                 <div>
@@ -112,6 +113,25 @@ export default function Dashboard() {
                   <p className="font-bold">{selectedTransaction.category}</p>
                 </div>
               </div>
+
+              {/* --- NEW: Necessity Tag (Only for Expenses) --- */}
+              {selectedTransaction.type === 'Expense' && selectedTransaction.necessity && (
+                <div className="flex items-center gap-4 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                  <div className="p-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 rounded-lg"><BarChart3 size={20}/></div>
+                  <div>
+                    <p className="text-xs text-gray-400 font-bold uppercase">Necessity</p>
+                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold mt-1 ${
+                      selectedTransaction.necessity === 'Needs' ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' :
+                      selectedTransaction.necessity === 'Wants' ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                      'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400'
+                    }`}>
+                      {selectedTransaction.necessity}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Account & Date */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
                   <div className="flex items-center gap-2 mb-1 text-gray-400">
@@ -126,7 +146,18 @@ export default function Dashboard() {
                   <p className="font-bold text-sm">{selectedTransaction.date}</p>
                 </div>
               </div>
+
+              {/* Note (Description) */}
+              {selectedTransaction.description && (
+                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                  <div className="flex items-center gap-2 mb-2 text-gray-400">
+                    <FileText size={14}/> <span className="text-xs font-bold uppercase">Note</span>
+                  </div>
+                  <p className="text-sm italic text-gray-600 dark:text-gray-300">"{selectedTransaction.description}"</p>
+                </div>
+              )}
             </div>
+
             <div className="grid grid-cols-2 gap-3 mt-6">
                <Link to={`/edit-transaction/${selectedTransaction.id}`} className="flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-white font-bold transition-colors">
                  <Pencil size={18}/> Edit
@@ -145,6 +176,7 @@ export default function Dashboard() {
         <Link to="/settings" className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-600 dark:text-white"><SettingsIcon size={20}/></Link>
       </div>
 
+      {/* Net Worth Card */}
       <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-6 rounded-3xl shadow-xl mb-8 relative overflow-hidden">
         <div className="relative z-10">
           <p className="text-blue-200 text-sm font-medium mb-1">Total Net Worth</p>
@@ -157,6 +189,7 @@ export default function Dashboard() {
         <h3 className="font-bold text-gray-700 dark:text-gray-300 text-sm">My Accounts</h3>
       </div>
       
+      {/* Account List */}
       <div className="flex gap-4 overflow-x-auto no-scrollbar mb-8 pb-2">
         <Link to="/add-account" className="min-w-[80px] flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-800 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-2xl p-4 text-gray-400 transition-all">
           <Plus size={24} />
@@ -175,7 +208,7 @@ export default function Dashboard() {
             </p>
             <p className="text-[10px] text-gray-400">{acc.type === 'Credit Card' ? 'Current Debt' : 'Available Balance'}</p>
 
-            {/* --- NEW: Credit Utilization Bar --- */}
+            {/* Credit Utilization Bar */}
             {acc.type === 'Credit Card' && parseFloat(acc.credit_limit) > 0 && (
               <div className="mt-3 animate-fade-in">
                 <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
